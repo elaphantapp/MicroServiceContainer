@@ -13,6 +13,8 @@ add_library(Service SHARED ${SOURCES})
 target_include_directories(Service PUBLIC
                           "${PROJECT_SOURCE_DIR}"
                           "${PROJECT_SOURCE_DIR}/../Transmitter"
+                          "${PROJECT_SOURCE_DIR}/../Transmitter/depends/include"
+                          "${PROJECT_SOURCE_DIR}/../Transmitter/depends/include/Elastos.SDK.Contact"
                           )
 
 find_library(SERVICE_LIBRARY Transmitter HINTS ${PROJECT_SOURCE_DIR}/../Transmitter/build)

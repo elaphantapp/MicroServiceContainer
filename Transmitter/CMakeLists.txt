@@ -10,8 +10,13 @@ file( GLOB SOURCES "*.cpp" )
 
 add_library(Transmitter SHARED ${SOURCES})
 
-
 target_include_directories(Transmitter PUBLIC
-                          "${PROJECT_BINARY_DIR}"
                           "${PROJECT_SOURCE_DIR}/../Service"
+                          "${PROJECT_SOURCE_DIR}/depends/include"
+                          "${PROJECT_SOURCE_DIR}/depends/include/Elastos.SDK.Contact"
                           )
+
+find_library(LIBRARY Elastos.SDK.Contact HINTS ${PROJECT_SOURCE_DIR}/depends/lib)
+
+target_link_libraries(Transmitter PUBLIC
+                      ${LIBRARY})

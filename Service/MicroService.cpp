@@ -43,6 +43,7 @@ int MicroService::Stop()
 
 int MicroService::HandleMessage(const std::string& did, const std::string& msg)
 {
+    printf("MicroService handle did: %s message: %s\n", did.c_str(), msg.c_str());
     return 0;
 }
 
