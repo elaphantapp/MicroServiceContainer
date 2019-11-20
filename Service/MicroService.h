@@ -28,6 +28,10 @@ public:
 
     virtual int HandleMessage(const std::string& did, const std::string& msg);
 
+    virtual std::shared_ptr<std::vector<uint8_t>> HandleData(int type, const std::vector<uint8_t>& data);
+
+    virtual void SetDataHandler(std::shared_ptr<IMicroService::DataHandler>& handler);
+
 private:
     void Init();
 
@@ -38,6 +42,7 @@ protected:
 
 private:
     std::shared_ptr<Transmitter> mTransmitter;
+    std::shared_ptr<IMicroService::DataHandler> mHandler;
 
 };
 

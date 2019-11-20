@@ -5,66 +5,58 @@
 #include <memory>
 #include <string>
 #include "IMicroService.h"
-#include "Elastos.SDK.Contact.hpp"
+#include "Contact.hpp"
 
 namespace elastos {
 
 class Transmitter {
 private:
-    class SecurityListener : public elastos::SecurityManager::SecurityListener {
+    class Listener : public ElaphantContact::Listener {
     public:
-        explicit SecurityListener(Transmitter* transmitter)
+        explicit Listener(Transmitter* transmitter)
             : mTransmitter(transmitter)
         {};
 
-        virtual ~SecurityListener() = default;
+        virtual ~Listener() = default;
 
-        virtual std::string onAcquirePublicKey() override;
+        virtual std::shared_ptr<std::vector<uint8_t>> onAcquire(const AcquireArgs& request) override;
 
-        virtual std::vector<uint8_t> onEncryptData(const std::string& pubKey, const std::vector<uint8_t>& src) override;
-        virtual std::vector<uint8_t> onDecryptData(const std::vector<uint8_t>& src) override;
+        virtual void onEvent(EventArgs& event) override;
 
-        virtual std::string onAcquireDidPropAppId() override;
-        virtual std::string onAcquireDidAgentAuthHeader() override;
+        virtual void onReceivedMessage(const std::string& humanCode,
+                                       ContactChannel channelType,
+                                       std::shared_ptr<ElaphantContact::Message> msgInfo) override;
 
-        virtual std::vector<uint8_t> onSignData(const std::vector<uint8_t>& originData) override;
+        virtual void onError(int errCode, const std::string& errStr,
+                             const std::string& ext) override;
+    private:
+        void HandleStatusChanged(const std::string& humanCode, elastos::HumanInfo::Status status);
 
     private:
         Transmitter* mTransmitter;
     };
 
-    class MessageListener : public elastos::MessageManager::MessageListener {
+    class DataListener : public ElaphantContact::DataListener {
     public:
-        explicit MessageListener(Transmitter* transmitter)
+        explicit DataListener(Transmitter* transmitter)
             : mTransmitter(transmitter)
         {};
 
-        virtual ~MessageListener() = default;
+        virtual ~DataListener() = default;
 
-        virtual void onStatusChanged(std::shared_ptr<elastos::UserInfo> userInfo,
-                                     elastos::MessageManager::ChannelType channelType,
-                                     elastos::UserInfo::Status status) override;
+        virtual void onNotify(const std::string& humanCode,
+                              ContactChannel channelType,
+                              const std::string& dataId, int status) override;
 
-        virtual void onReceivedMessage(std::shared_ptr<elastos::HumanInfo> humanInfo,
-                                       elastos::MessageManager::ChannelType channelType,
-                                       const std::shared_ptr<elastos::MessageManager::MessageInfo> msgInfo) override;
+        virtual int onReadData(const std::string& humanCode,
+                               ContactChannel channelType,
+                               const std::string& dataId, uint64_t offset,
+                               std::vector<uint8_t>& data) override;
 
-        virtual void onSentMessage(int msgIndex, int errCode) override;
-
-        virtual void onFriendRequest(std::shared_ptr<elastos::FriendInfo> friendInfo,
-                                     elastos::MessageManager::ChannelType channelType,
-                                     const std::string& summary) override;
-
-        virtual void onFriendStatusChanged(std::shared_ptr<elastos::FriendInfo> friendInfo,
-                                           elastos::MessageManager::ChannelType channelType,
-                                           elastos::FriendInfo::Status status) override;
-
-        virtual void onHumanInfoChanged(std::shared_ptr<elastos::HumanInfo> humanInfo,
-                                        elastos::MessageManager::ChannelType channelType) override;
-
-    private:
-        void HandleStatusChanged(HumanInfo* humanInfo, elastos::HumanInfo::Status status);
-
+        virtual int onWriteData(const std::string& humanCode,
+                                ContactChannel channelType,
+                                const std::string& dataId, uint64_t offset,
+                                const std::vector<uint8_t>& data) override;
     private:
         Transmitter* mTransmitter;
     };
@@ -85,6 +77,8 @@ public:
 
     std::string GetDid();
 
+    int GetFriendList(std::stringstream* info);
+
 private:
     Transmitter(IMicroService* service, const std::string& publicKey)
         : mService(service)
@@ -96,11 +90,17 @@ private:
 
     void HandleMessage(const std::string& humanId, const std::string& type, const std::string& content, int length);
 
+    std::shared_ptr<std::vector<uint8_t>> HandleData(int type, const std::vector<uint8_t>& data);
+
+    std::string GetAgentAuthHeader();
+
 private:
-    static Transmitter* s_instance;
+    static std::shared_ptr<Transmitter> s_instance;
 
     IMicroService* mService;
-    std::shared_ptr<Contact> mContact;
+    std::shared_ptr<ElaphantContact> mContact;
+    std::shared_ptr<Listener> mListener;
+    std::shared_ptr<DataListener> mDataListener;
 
     std::string mPublicKey;
 };
