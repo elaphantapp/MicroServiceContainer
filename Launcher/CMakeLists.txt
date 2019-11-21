@@ -15,3 +15,5 @@ target_include_directories(Launcher PUBLIC
                           "${PROJECT_BINARY_DIR}"
                           "${PROJECT_SOURCE_DIR}/../Service"
                           )
+
+INSTALL(TARGETS Launcher DESTINATION bin)
