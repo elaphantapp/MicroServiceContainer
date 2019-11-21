@@ -8,6 +8,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <iostream>
+#include "Crypto.h"
 
 using namespace elastos;
 
@@ -20,8 +21,10 @@ std::mutex mutex;
 bool serviceRunning = false;
 
 
-void StartService(const std::string& library, const std::string& path, const std::string& publicKey)
+void StartService(const std::string& library, const std::string& path, const std::string& privateKey, const std::string& publicKey)
 {
+    std::shared_ptr<IMicroService::DataHandler> crypto = Crypto::Instance(privateKey);
+
     void *handle = dlopen(library.c_str(), RTLD_LAZY);
     if (!handle) {
         /* fail to load the library */
@@ -47,6 +50,7 @@ void StartService(const std::string& library, const std::string& path, const std
         return;
     }
 
+    service->SetDataHandler(crypto);
 
     ret = service->Start();
     if (ret != 0) {
@@ -88,12 +92,14 @@ int main(int argc, char* argv[])
     int c;
     std::string library;
     std::string path;
+    std::string privateKey;
     std::string publicKey;
 
     static struct option long_options[] =
     {
         {"name", required_argument, NULL, 'n'},
         {"path", required_argument, NULL, 'p'},
+        {"secret", required_argument, NULL, 's'},
         {"key", required_argument, NULL, 'k'},
         {"help", no_argument, NULL, 'h'},
         {0, 0, 0, 0}
@@ -101,7 +107,7 @@ int main(int argc, char* argv[])
 
     while(1) {
         int opt_index = 0;
-        c = getopt_long(argc, argv, "n:p:k:h", long_options, &opt_index);
+        c = getopt_long(argc, argv, "n:p:s:k:h", long_options, &opt_index);
 
         if (-1 == c) {
             break;
@@ -115,6 +121,10 @@ int main(int argc, char* argv[])
             case 'p':
                 printf("param p: %s\n", argv[optind]);
                 path = argv[optind];
+                break;
+            case 's':
+                printf("param s: %s\n", argv[optind]);
+                privateKey = argv[optind];
                 break;
             case 'k':
                 printf("param k: %s\n", argv[optind]);
@@ -136,13 +146,18 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    if (privateKey.empty()) {
+        printf("Please set service public key by -secret!\n");
+        return -1;
+    }
+
     if (publicKey.empty()) {
         printf("Please set service public key by -key!\n");
         return -1;
     }
 
     serviceRunning = true;
-    std::thread workthread(StartService, library, path, publicKey);
+    std::thread workthread(StartService, library, path, privateKey, publicKey);
 
     while (1) {
         std::string command;
