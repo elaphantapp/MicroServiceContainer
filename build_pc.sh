@@ -11,8 +11,10 @@ echo "build path: ${OUTPUT_PATH}"
 mkdir -p  ${OUTPUT_PATH}/build
 mkdir -p  ${OUTPUT_PATH}/dict
 
-SDK_DIR="/Users/liufy/Documents/Projects/ElephantWallet/sdk/Elastos.SDK.ElephantWallet.Contact/"
-SDK_INSTALL_DIR="/Users/liufy/Documents/Projects/ElephantWallet/sdk/Elastos.SDK.ElephantWallet.Contact/build/sysroot/Darwin/x86_64"
+CURRENT_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd);
+PROJECT_DIR=$(dirname "$CURRENT_DIR")
+SDK_DIR="${PROJECT_DIR}/Elastos.SDK.ElephantWallet.Contact"
+SDK_INSTALL_DIR="${SDK_DIR}/build/sysroot/Darwin/x86_64"
 SDK_INCLUDE_DIR="${SDK_INSTALL_DIR}/include/"
 
 # copy Josn.hpp to install path
