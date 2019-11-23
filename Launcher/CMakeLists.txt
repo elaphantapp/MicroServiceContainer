@@ -21,3 +21,5 @@ find_library(LAUNCHER_LIBRARY Elastos.SDK.Keypair.C HINTS ${PROJECT_SOURCE_DIR}/
 
 target_link_libraries(Launcher PUBLIC
                       ${LAUNCHER_LIBRARY})
+
+INSTALL(TARGETS Launcher DESTINATION bin)
