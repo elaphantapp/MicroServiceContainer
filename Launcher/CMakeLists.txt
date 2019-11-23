@@ -14,6 +14,12 @@ add_executable(Launcher ${SOURCES})
 target_include_directories(Launcher PUBLIC
                           "${PROJECT_BINARY_DIR}"
                           "${PROJECT_SOURCE_DIR}/../Service"
+                          "${PROJECT_SOURCE_DIR}/depends"
                           )
+
+find_library(LAUNCHER_LIBRARY Elastos.SDK.Keypair.C HINTS ${PROJECT_SOURCE_DIR}/depends)
+
+target_link_libraries(Launcher PUBLIC
+                      ${LAUNCHER_LIBRARY})
 
 INSTALL(TARGETS Launcher DESTINATION bin)

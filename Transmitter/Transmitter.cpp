@@ -1,106 +1,104 @@
 
 #include "Transmitter.h"
 #include <sstream>
+#include "ContactDebug.hpp"
 
 namespace elastos {
 
-Transmitter* Transmitter::s_instance = NULL;
+std::shared_ptr<Transmitter> Transmitter::s_instance;
 
 
-/**************  Transmitter::SecurityListener **************/
-std::string Transmitter::SecurityListener::onAcquirePublicKey()
+/**************  Transmitter::Listener **************/
+std::shared_ptr<std::vector<uint8_t>> Transmitter::Listener::onAcquire(const AcquireArgs& request)
 {
-    return mTransmitter->mPublicKey;
+    std::shared_ptr<std::vector<uint8_t>> response;
+
+    switch(request.type) {
+    case ElaphantContact::Listener::AcquireType::PublicKey:
+        response = std::make_shared<std::vector<uint8_t>>(
+                    mTransmitter->mPublicKey.begin(), mTransmitter->mPublicKey.end());
+        break;
+    case ElaphantContact::Listener::AcquireType::EncryptData:
+        response = mTransmitter->HandleData(IMicroService::OperationType_Encrypt, request.data);
+        break;
+    case ElaphantContact::Listener::AcquireType::DecryptData:
+        response = mTransmitter->HandleData(IMicroService::OperationType_Decrypt, request.data);
+        break;
+    case ElaphantContact::Listener::AcquireType::DidPropAppId:
+    {
+        std::string appId = "DC92DEC59082610D1D4698F42965381EBBC4EF7DBDA08E4B3894D530608A64AA"
+                            "A65BB82A170FBE16F04B2AF7B25D88350F86F58A7C1F55CC29993B4C4C29E405";
+        response = std::make_shared<std::vector<uint8_t>>(appId.begin(), appId.end());
+        break;
+    }
+    case ElaphantContact::Listener::AcquireType::DidAgentAuthHeader:
+    {
+        std::string header = mTransmitter->GetAgentAuthHeader();
+        printf("auth header: %s\n", header.c_str());
+        response = std::make_shared<std::vector<uint8_t>>(header.begin(), header.end());
+        break;
+    }
+    case ElaphantContact::Listener::AcquireType::SignData:
+    {
+        printf("request sign data\n");
+        response = mTransmitter->HandleData(IMicroService::OperationType_Sign, request.data);
+        break;
+    }
+
+    }
+
+    return response;
 }
 
-std::vector<uint8_t> Transmitter::SecurityListener::onEncryptData(const std::string& pubKey, const std::vector<uint8_t>& src)
+void Transmitter::Listener::onEvent(EventArgs& event)
 {
-    return src;
-}
-
-std::vector<uint8_t> Transmitter::SecurityListener::onDecryptData(const std::vector<uint8_t>& src)
-{
-    return src;
-}
-
-std::string Transmitter::SecurityListener::onAcquireDidPropAppId()
-{
-    return "";
-}
-
-std::string Transmitter::SecurityListener::onAcquireDidAgentAuthHeader()
-{
-    return "";
-}
-
-std::vector<uint8_t> Transmitter::SecurityListener::onSignData(const std::vector<uint8_t>& originData)
-{
-    assert(0);
-    return std::vector<uint8_t>();
-}
-
-
-/**************  Transmitter::MessageListener **************/
-
-void Transmitter::MessageListener::onStatusChanged(std::shared_ptr<elastos::UserInfo> userInfo,
-                                     elastos::MessageManager::ChannelType channelType,
-                                     elastos::UserInfo::Status status)
-{
-    HandleStatusChanged(userInfo.get(), status);
-}
-
-void Transmitter::MessageListener::onReceivedMessage(std::shared_ptr<elastos::HumanInfo> humanInfo,
-                               elastos::MessageManager::ChannelType channelType,
-                               const std::shared_ptr<elastos::MessageManager::MessageInfo> msgInfo)
-{
-    std::string humanCode;
-    humanInfo->getHumanCode(humanCode);
-
-    if (msgInfo->mType == elastos::MessageManager::MessageType::MsgText) {
-        uint8_t* data = msgInfo->mPlainContent.data();
-        std::string content(reinterpret_cast<const char*>(data));
-        mTransmitter->HandleMessage(humanCode, "textMsg", content, content.size());
+    switch (event.type) {
+    case ElaphantContact::Listener::EventType::StatusChanged:
+    {
+        auto statusEvent = dynamic_cast<ElaphantContact::Listener::StatusEvent*>(&event);
+        HandleStatusChanged(event.humanCode, statusEvent->status);
+        break;
+    }
+    case ElaphantContact::Listener::EventType::FriendRequest:
+    {
+        auto requestEvent = dynamic_cast<ElaphantContact::Listener::RequestEvent*>(&event);
+        mTransmitter->HandleMessage(event.humanCode,
+                "friendRequest", requestEvent->summary, requestEvent->summary.size());
+        break;
+    }
+    case ElaphantContact::Listener::EventType::HumanInfoChanged:
+    {
+        auto infoEvent = dynamic_cast<ElaphantContact::Listener::InfoEvent*>(&event);
+        std::string content = infoEvent->toString();
+        mTransmitter->HandleMessage(event.humanCode, "infoChanged", content, content.size());
+        break;
+    }
+    default:
+        printf("Unprocessed event: %d", static_cast<int>(event.type));
+        break;
     }
 }
 
-void Transmitter::MessageListener::onSentMessage(int msgIndex, int errCode)
+void Transmitter::Listener::onReceivedMessage(const std::string& humanCode,
+                               ContactChannel channelType,
+                               std::shared_ptr<ElaphantContact::Message> msgInfo)
 {
-
+    if (msgInfo->type == ElaphantContact::Message::Type::MsgText) {
+        std::string content = msgInfo->data->toString();
+        mTransmitter->HandleMessage(humanCode, "textMsg", content, content.size());
+    }
+    else {
+        printf("Received message type: %s\n", std::to_string(static_cast<int>(msgInfo->type)).c_str());
+    }
 }
 
-void Transmitter::MessageListener::onFriendRequest(std::shared_ptr<elastos::FriendInfo> friendInfo,
-                             elastos::MessageManager::ChannelType channelType,
-                             const std::string& summary)
+void Transmitter::Listener::onError(int errCode, const std::string& errStr, const std::string& ext)
 {
-    std::string humanCode;
-    friendInfo->getHumanCode(humanCode);
-    mTransmitter->HandleMessage(humanCode, "friendRequest", summary, summary.size());
+    printf("contact error code: %d: %s, %s\n", errCode, errStr.c_str(), ext.c_str());
 }
 
-void Transmitter::MessageListener::onFriendStatusChanged(std::shared_ptr<elastos::FriendInfo> friendInfo,
-                                   elastos::MessageManager::ChannelType channelType,
-                                   elastos::FriendInfo::Status status)
+void Transmitter::Listener::HandleStatusChanged(const std::string& humanCode, elastos::HumanInfo::Status status)
 {
-    HandleStatusChanged(friendInfo.get(), status);
-}
-
-void Transmitter::MessageListener::onHumanInfoChanged(std::shared_ptr<elastos::HumanInfo> humanInfo,
-                                        elastos::MessageManager::ChannelType channelType)
-{
-    std::string humanCode;
-    humanInfo->getHumanCode(humanCode);
-
-    std::string content;
-    humanInfo->serialize(content, true);
-
-    mTransmitter->HandleMessage(humanCode, "infoChanged", content, content.size());
-}
-
-void Transmitter::MessageListener::HandleStatusChanged(HumanInfo* humanInfo, elastos::HumanInfo::Status status)
-{
-    std::string humanCode;
-    humanInfo->getHumanCode(humanCode);
-
     std::string type = "status";
     std::string content;
     switch(status) {
@@ -127,40 +125,77 @@ void Transmitter::MessageListener::HandleStatusChanged(HumanInfo* humanInfo, ela
     mTransmitter->HandleMessage(humanCode, type, content, content.size());
 }
 
+/**************  Transmitter::DataListener **************/
+void Transmitter::DataListener::onNotify(const std::string& humanCode,
+                      ContactChannel channelType,
+                      const std::string& dataId, int status)
+{
+    printf("Contact data notify: %s, dataId: %s, status: %s\n",
+            humanCode.c_str(), dataId.c_str(), std::to_string(status).c_str());
+}
+
+int Transmitter::DataListener::onReadData(const std::string& humanCode,
+                       ContactChannel channelType,
+                       const std::string& dataId, uint64_t offset,
+                       std::vector<uint8_t>& data)
+{
+    printf("Contact onReadData: %s, dataId: %s, offset: %lld\n",
+            humanCode.c_str(), dataId.c_str(), offset);
+    return 0;
+}
+
+int Transmitter::DataListener::onWriteData(const std::string& humanCode,
+                        ContactChannel channelType,
+                        const std::string& dataId, uint64_t offset,
+                        const std::vector<uint8_t>& data)
+{
+    printf("Contact onWriteData: %s, dataId: %s, offset: %lld\n",
+            humanCode.c_str(), dataId.c_str(), offset);
+    return 0;
+}
+
 
 /**************  Transmitter **************/
 std::shared_ptr<Transmitter> Transmitter::Instance(const std::string& path, const std::string& publicKey, IMicroService* service)
 {
-    if (s_instance == NULL) {
-        s_instance = new Transmitter(service, publicKey);
+    if (s_instance.get() == nullptr) {
+        s_instance = std::shared_ptr<Transmitter>(new Transmitter(service, publicKey));
         s_instance->Init(path);
     }
 
-    return std::shared_ptr<Transmitter>(s_instance);
+    return s_instance;
 }
 
 void Transmitter::Init(const std::string& path)
 {
-    Contact::Factory::SetLogLevel(7);
-    Contact::Factory::SetLocalDataDir(path);
+    ElaphantContact::Factory::SetLogLevel(7);
+    ElaphantContact::Factory::SetLocalDataDir(path);
 
-    mContact = Contact::Factory::Create();
+    mContact = ElaphantContact::Factory::Create();
     if (mContact.get() == NULL) {
-        printf("Contact Factory Create failed!\n");
+        printf("ElaphantContact Factory Create failed!\n");
         return;
     }
 
-    auto securityListener = std::make_shared<Transmitter::SecurityListener>(this);
-    auto messageListener = std::make_shared<Transmitter::MessageListener>(this);
-    mContact->setListener(securityListener, NULL, NULL, messageListener);
+    mListener = std::make_shared<Transmitter::Listener>(this);
+    mDataListener = std::make_shared<Transmitter::DataListener>(this);
+    mContact->setListener(mListener.get());
+    mContact->setDataListener(mDataListener.get());
 }
 
 void Transmitter::HandleMessage(const std::string& humanId, const std::string& type, const std::string& content, int length)
 {
-    std::stringstream ss;
-    ss << "{\"type\":\"" << type << "\", \"content\":\"" << content << "\", \"length\":" << length << "}";
+    Json json;
+    json["type"] = type;
+    json["content"] = content;
+    json["lenght"] = length;
 
-    mService->HandleMessage(humanId, ss.str());
+    mService->HandleMessage(humanId, json.dump());
+}
+
+std::shared_ptr<std::vector<uint8_t>> Transmitter::HandleData(int type, const std::vector<uint8_t>& data)
+{
+    return mService->HandleData(type, data);
 }
 
 int Transmitter::Start()
@@ -168,7 +203,14 @@ int Transmitter::Start()
     if (mContact.get() == NULL) return -1;
 
     printf("Transmitter start!\n");
-    mContact->start();
+    int ret = mContact->start();
+    if (ret != 0) return ret;
+
+    std::stringstream ss;
+    ContactDebug::GetCachedDidProp(&ss);
+    printf("cachedDidProp: %s\n", ss.str().c_str());
+    mContact->syncInfoUploadToDidChain();
+
     return 0;
 }
 
@@ -177,36 +219,60 @@ int Transmitter::Stop()
     if (mContact.get() == NULL) return -1;
 
     printf("Transmitter stop!\n");
-    mContact->stop();
-    return 0;
+    return mContact->stop();
 }
 
 int Transmitter::SendMessage(const std::string& did, const std::string& msg)
 {
-    printf("Transmitter SendMessage!\n");
+    printf("Transmitter SendMessage: %s\n", msg.c_str());
+    Json json = Json::parse(msg);
+    std::string type = json["type"];
+    std::string content = json["content"];
+
+    if (!type.compare("acceptFriend")) {
+        mContact->acceptFriend(did);
+    }
+    else if (!type.compare("textMsg")) {
+        auto msgInfo = ElaphantContact::MakeTextMessage(content);
+        if(msgInfo == nullptr) {
+            printf("Failed to make text message.");
+            return -1;
+        }
+
+        auto ret = mContact->sendMessage(did.c_str(), ContactChannel::Carrier, msgInfo);
+    }
+
     return 0;
 }
 
 std::string Transmitter::GetDid()
 {
-    if (!mContact->isStarted()) {
-        printf("Please start transmitter first!\n");
+    auto userInfo = mContact->getUserInfo();
+    if (userInfo == nullptr) {
+        printf("getUserInfo failed!\n");
         return "";
     }
-
-    std::weak_ptr<elastos::UserManager> userManager = mContact->getUserManager();
-    auto um = userManager.lock();
-    if (um.get() == nullptr) {
-        return "";
-    }
-
-    std::shared_ptr<elastos::UserInfo> userInfo;
-    um->getUserInfo(userInfo);
 
     std::string humanCode;
     userInfo->getHumanCode(humanCode);
 
     return humanCode;
+}
+
+int Transmitter::GetFriendList(std::stringstream* info)
+{
+    if (!info) return -1;
+
+    return mContact->getFriendList(info);
+}
+
+std::string Transmitter::GetAgentAuthHeader()
+{
+    std::string appid = "org.elastos.microservice.test";
+    std::string appkey = "b2gvzUM79yLhCbbGNWCuhSsGdqYhA7sS";
+    std::string headerValue = "id=" + appid + ";time=77777;auth=" + appkey;
+
+    return headerValue;
 }
 
 }
