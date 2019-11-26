@@ -41,8 +41,8 @@ build_module() {
 	src_dir="$(pwd)/${1}"
 	mkdir -p ${OUTPUT_PATH}/build/${1}
 	pushd ${OUTPUT_PATH}/build/${1}
-	/usr/local/bin/cmake -DCMAKE_INSTALL_PREFIX=${OUTPUT_PATH}/dict ${2} ${src_dir}
-	make && make install
+	cmake -DCMAKE_INSTALL_PREFIX=${OUTPUT_PATH}/dict ${2} ${src_dir}
+	make VERBOSE=1 && make install
 	if [ $? != 0 ]; then
 		logerr "Build failed: ${1}"
 		exit -1
